@@ -1,0 +1,36 @@
+<?php
+    $base = '../';
+    require_once $base.'includes/auth.php';
+    require_once $base.'includes/mascotas.php';
+    require_once $base.'includes/contenido.php';
+    $a = articulo_por_id((int)($_GET['id'] ?? 0));
+    $pageTitle = 'Artículo';
+    if (!$a) { http_response_code(404); $pageTitle = 'Artículo no encontrado'; }
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="container py-5">
+  <a href="articulos.html" class="muted">← Volver a artículos</a>
+  <?php if (!$a): ?>
+    <div class="nh-card mt-3">
+      <h1 class="fw-800">Artículo no encontrado</h1>
+      <p class="muted">El artículo que buscas no existe.</p>
+      <a href="articulos.html" class="btn btn-primary">Ver todos los artículos</a>
+    </div>
+  <?php else: ?>
+    <article class="nh-card mt-3">
+      <span class="badge-soft"><?= e($a['categoria'] ?: 'General') ?></span>
+      <h1 class="fw-800 mt-3"><?= e($a['titulo']) ?></h1>
+      <p class="muted"><?= e($a['resumen']) ?> Publicado el <?= e(fecha_es($a['fecha'])) ?> para fines educativos.</p>
+      <hr>
+      <?php foreach (articulo_secciones($a['contenido']) as [$t, $c]): ?>
+        <h4 class="fw-800"><?= e($t) ?></h4>
+        <?php foreach (preg_split('/\R{2,}/', $c) as $par): if (trim($par) === '') continue; ?><p><?= nl2br(e($par)) ?></p><?php endforeach; ?>
+      <?php endforeach; ?>
+      <p class="muted small mb-0">Este contenido es informativo y no reemplaza la valoración de un médico veterinario.</p>
+    </article>
+  <?php endif; ?>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>

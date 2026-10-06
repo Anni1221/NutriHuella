@@ -1,0 +1,100 @@
+<?php
+    $base = '';
+    require_once __DIR__.'/includes/auth.php';
+    require_once __DIR__.'/includes/mascotas.php';
+    require_once __DIR__.'/includes/calculos.php';
+    require_once __DIR__.'/includes/seguimiento.php';
+    [$u, $m] = requerir_mascota($base);
+    $mid = (int)$m['id'];
+    $calc = nh_calcular($m + ['alimento' => 'natural', 'comidas' => 2]);
+    $pesos = pesos_de($mid);
+    $ultimo = $pesos ? end($pesos) : null;
+    $t = transicion_de($mid);
+    $dias_sin_peso = $ultimo ? (int)floor((time() - strtotime($ultimo['fecha'])) / 86400) : null;
+
+    // Próximo paso según lo que ya hizo el usuario
+    if (!$ultimo || $dias_sin_peso > 30) {
+        $paso = ['Registra el peso de '.$m['nombre'], $ultimo ? 'Han pasado '.$dias_sin_peso.' días desde la última medición.' : 'Aún no hay mediciones de peso.', 'seguimiento/peso.html', 'Registrar peso'];
+    } elseif (!$t) {
+        $paso = ['Inicia el plan de transición', 'Calculamos cuánto de cada alimento debe recibir '.$m['nombre'].' cada semana.', 'seguimiento/transicion.html', 'Iniciar plan'];
+    } elseif ($t['estado'] === 'en_curso') {
+        $paso = ['Continúa la semana '.$t['actual'].' de la transición', 'Marca la semana como completada cuando termines y anota tus observaciones.', 'seguimiento/transicion.html', 'Ver plan'];
+    } elseif ($t['estado'] === 'pausada') {
+        $paso = ['Tu plan de transición está en pausa', 'Reanúdalo cuando '.$m['nombre'].' esté listo.', 'seguimiento/transicion.html', 'Ver plan'];
+    } else {
+        $paso = ['¡Todo al día!', 'La transición está completa. Sigue registrando el peso para vigilar su progreso.', 'seguimiento/progreso.html', 'Ver mi progreso'];
+    }
+
+    $pageTitle = 'Panel principal';
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="container py-5">
+    <div class="d-flex flex-wrap justify-content-between align-items-end mb-4">
+        <div>
+            <span class="badge-soft">Panel principal</span>
+            <h1 class="fw-800 mt-2">Hola, <?= e(explode(' ', $u['nombre'])[0]) ?> 👋</h1>
+            <p class="muted mb-0">Aquí puedes consultar y actualizar el bienestar de tu mascota.</p>
+        </div>
+        <a href="mascota/editar.html" class="btn btn-primary-soft">Editar perfil</a>
+    </div>
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <span class="muted">Mascota activa</span>
+                <div class="stat-number"><?= emoji_mascota($m['tipo']).' '.e($m['nombre']) ?></div>
+                <span class="badge-soft"><?= $m['tipo'] === 'gato' ? 'Felina' : 'Canina' ?> · <?= e($m['etapa']) ?></span>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <span class="muted">Peso registrado</span>
+                <div class="stat-number"><?= e(kg((float)$m['peso_kg'])) ?> kg</div>
+                <span class="muted"><?= $ultimo ? 'Medido el '.e(fecha_es($ultimo['fecha'])) : 'Sin mediciones' ?></span>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <span class="muted">Condición corporal</span>
+                <div class="stat-number" style="font-size:1.5rem"><?= $m['etapa'] === 'cachorro' ? 'En crecimiento' : e(['bajo' => 'Bajo peso', 'ideal' => 'Peso ideal', 'sobrepeso' => 'Sobrepeso'][$m['condicion']]) ?></div>
+                <span class="muted">Ideal: <?= e($m['rango_min']) ?>–<?= e($m['rango_max']) ?> kg · <?= $calc['der'] ?> kcal/día</span>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <span class="muted">Transición</span>
+                <?php if (!$t): ?>
+                    <div class="stat-number" style="font-size:1.5rem">Sin iniciar</div>
+                    <a href="seguimiento/transicion.html" class="muted">Iniciar plan →</a>
+                <?php else: ?>
+                    <div class="stat-number" style="font-size:1.5rem"><?= $t['estado'] === 'completada' ? 'Completada' : ($t['estado'] === 'pausada' ? 'En pausa' : 'Semana '.$t['actual']) ?></div>
+                    <div class="progress mt-2"><div class="progress-bar" style="width:<?= $t['pct'] ?>%"></div></div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="nh-card">
+                <h4 class="fw-800">Acciones rápidas</h4>
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6"><a class="nh-card d-block" href="nutricion/calculadora.html"><b>🥗 Calcular porción</b><br><span class="muted">Consulta una porción orientativa.</span></a></div>
+                    <div class="col-md-6"><a class="nh-card d-block" href="seguimiento/peso.html"><b>⚖️ Registrar peso</b><br><span class="muted">Añade una nueva medición.</span></a></div>
+                    <div class="col-md-6"><a class="nh-card d-block" href="seguimiento/transicion.html"><b>🔄 Ver transición</b><br><span class="muted">Continúa el plan semanal.</span></a></div>
+                    <div class="col-md-6"><a class="nh-card d-block" href="educativo/articulos.html"><b>📚 Aprender</b><br><span class="muted">Explora contenido educativo.</span></a></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="nh-card">
+                <h5 class="fw-800">Próximo paso</h5>
+                <p class="mb-1"><b><?= e($paso[0]) ?></b></p>
+                <p class="muted"><?= e($paso[1]) ?></p>
+                <a href="<?= e($paso[2]) ?>" class="btn btn-primary"><?= e($paso[3]) ?></a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>

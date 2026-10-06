@@ -1,0 +1,100 @@
+<?php
+    $base = '../';
+    require_once $base.'includes/auth.php';
+    require_once $base.'includes/mascotas.php';
+    require_once $base.'includes/calculos.php';
+    $u = requerir_login($base);
+
+    $todas = mascotas_de((int)$u['id']);
+    if (!$todas) { flash('info', 'Aún no has registrado ninguna mascota.'); redirigir('registrar.html'); }
+    if (isset($_GET['id'])) {
+        foreach ($todas as $t) if ((int)$t['id'] === (int)$_GET['id']) $_SESSION['mascota_id'] = $t['id'];
+        redirigir('perfil.html');
+    }
+    $m = mascota_activa((int)$u['id']);
+    $calc = nh_calcular($m + ['alimento' => 'natural', 'comidas' => 2]);
+
+    $pageTitle = 'Perfil de mascota';
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="container py-5">
+    <div class="nh-card">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <div class="pet-avatar">
+                <?= emoji_mascota($m['tipo']) ?>
+            </div>
+            <div class="flex-grow-1">
+                <span class="badge-soft">
+                    Perfil activo
+                </span>
+                <h1 class="fw-800 mb-1">
+                    <?= e($m['nombre']) ?>
+                </h1>
+                <p class="muted mb-0">
+                    <?= $m['tipo'] === 'gato' ? 'Gato' : 'Perro' ?> · <?= e($m['raza'] ?: 'Sin raza registrada') ?> · Actividad <?= e(strtolower(etiqueta_actividad($m['actividad']))) ?> (calculada)
+                </p>
+            </div>
+            <a href="editar.html" class="btn btn-primary-soft">
+                Editar
+            </a>
+            <a href="registrar.html" class="btn btn-primary-soft">
+                + Otra mascota
+            </a>
+        </div>
+        <?php if (count($todas) > 1): ?>
+            <div class="mt-3">
+                <span class="muted">Cambiar de mascota:</span>
+                <?php foreach ($todas as $t): ?>
+                    <a class="btn btn-sm <?= $t['id'] == $m['id'] ? 'btn-primary' : 'btn-primary-soft' ?>" href="perfil.html?id=<?= (int)$t['id'] ?>"><?= emoji_mascota($t['tipo']).' '.e($t['nombre']) ?></a>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+    <div class="row g-4 mt-1">
+        <div class="col-md-4">
+            <div class="nh-card">
+                <span class="muted">Edad</span>
+                <h3 class="fw-800"><?= $m['edad_anios'] !== null ? e(rtrim(rtrim(number_format((float)$m['edad_anios'], 1), '0'), '.')).' años' : '—' ?></h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="nh-card">
+                <span class="muted">Peso</span>
+                <h3 class="fw-800"><?= e(rtrim(rtrim(number_format((float)$m['peso_kg'], 2), '0'), '.')) ?> kg</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="nh-card">
+                <span class="muted">Energía diaria estimada</span>
+                <h3 class="fw-800"><?= $calc['der'] ?> kcal</h3>
+            </div>
+        </div>
+    </div>
+    <div class="row g-4 mt-1">
+        <div class="col-lg-6">
+            <div class="nh-card">
+                <h5 class="fw-800">Salud registrada</h5>
+                <p class="muted">Alergias: <?= e($m['alergias'] ?: 'Ninguna registrada.') ?></p>
+                <p class="muted mb-1">Etapa de vida: <b><?= e($m['etapa']) ?></b> · Estatura: <b><?= $m['estatura_cm'] ? e(rtrim(rtrim(number_format((float)$m['estatura_cm'], 1), '0'), '.')).' cm' : '—' ?></b> (tamaño <b><?= e(strtolower(NH_TAMANOS[$m['tamano']])) ?></b>) · <?= $m['esterilizado'] ? 'Esterilizado' : 'No esterilizado' ?></p>
+                <p class="muted mb-1">Condición corporal: <b><?= e(['bajo' => 'bajo peso', 'ideal' => 'peso ideal', 'sobrepeso' => 'sobrepeso'][$m['condicion']]) ?></b>
+                    <?= $m['etapa'] === 'cachorro' ? '(en crecimiento)' : '' ?></p>
+                <p class="muted small mb-0">Peso ideal estimado según <?= $m['raza_conocida'] ? 'su raza' : 'su tamaño' ?>: <?= e($m['rango_min']) ?>–<?= e($m['rango_max']) ?> kg. Estimación orientativa; el veterinario es quien valora la condición corporal.</p>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="nh-card">
+                <h5 class="fw-800">Accesos</h5>
+                <a class="btn btn-primary w-100 mb-2" href="../nutricion/calculadora.html">
+                    🥗 Calculadora nutricional
+                </a>
+                <a class="btn btn-primary-soft w-100" href="../seguimiento/progreso.html">
+                    📈 Ver progreso
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>

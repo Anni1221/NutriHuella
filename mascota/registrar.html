@@ -1,0 +1,56 @@
+<?php
+    $base = '../';
+    require_once $base.'includes/auth.php';
+    require_once $base.'includes/mascotas.php';
+    $u = requerir_login($base);
+
+    $m = ['tipo' => 'perro'];
+    $errores = [];
+    if (es_post()) {
+        $m = mascota_desde_post();
+        $errores = csrf_ok() ? mascota_validar($m) : ['La sesión expiró, intenta de nuevo.'];
+        if (!$errores) {
+            $m = array_merge($m, nh_derivar($m));   // etapa, actividad y condición calculadas
+            $ahora = date('Y-m-d H:i:s');
+            $pdo->beginTransaction();
+            $pdo->prepare('INSERT INTO mascotas (usuario_id,nombre,tipo,raza,edad_anios,estatura_cm,tamano,etapa,esterilizado,peso_actual,nivel_actividad,condicion,alergias)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+                ->execute([$u['id'], $m['nombre'], ucfirst($m['tipo']), $m['raza'] ?: null, $m['edad_anios'], $m['estatura_cm'], $m['tamano'], $m['etapa'], $m['esterilizado'],
+                           $m['peso_kg'], ucfirst($m['actividad']), $m['condicion'], $m['alergias'] ?: null]);
+            $id = (int)$pdo->lastInsertId();
+            $pdo->prepare('INSERT INTO registros_peso (mascota_id, fecha, peso) VALUES (?,?,?)')->execute([$id, date('Y-m-d'), $m['peso_kg']]);
+            $pdo->commit();
+            $_SESSION['mascota_id'] = $id;
+            flash('success', '¡'.$m['nombre'].' fue registrado correctamente!');
+            redirigir('perfil.html');
+        }
+    }
+
+    $pageTitle = 'Registrar mascota';
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="page-head">
+    <div class="container">
+        <h1>
+            Registra a tu mascota 🐾
+        </h1>
+        <p class="muted mb-0">
+            Completa la ficha para personalizar la experiencia.
+        </p>
+    </div>
+</div>
+<div class="container pb-5">
+    <div class="form-card">
+        <form action="registrar.html" method="post">
+            <?php include __DIR__.'/_form.php'; ?>
+            <button class="btn btn-primary mt-4">
+                Guardar ficha
+                <i class="bi bi-arrow-right"></i>
+            </button>
+        </form>
+    </div>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>

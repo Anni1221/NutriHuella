@@ -1,0 +1,26 @@
+<?php
+    require_once '../includes/auth.php';
+    require_once '../includes/mascotas.php';
+    require_once '../includes/admin_layout.php';
+    $u = requerir_admin('../');
+    if (es_post() && csrf_ok() && ($_POST['accion'] ?? '') === 'estado') {
+        $pdo->prepare("UPDATE mascotas SET estado = CASE estado WHEN 'activa' THEN 'inactiva' ELSE 'activa' END WHERE id = ?")->execute([(int)$_POST['id']]);
+        flash('success', 'Estado actualizado.');
+        redirigir('mascotas.html');
+    }
+    $rows = $pdo->query('SELECT m.*, u.nombre AS responsable FROM mascotas m JOIN usuarios u ON u.id = m.usuario_id ORDER BY m.id DESC')->fetchAll();
+    admin_inicio('Mascotas', 'Consulta general de mascotas registradas.');
+?>
+<div class="nh-card"><div class="table-responsive">
+<table class="table align-middle"><thead><tr><th>Mascota</th><th>Especie</th><th>Raza</th><th>Edad</th><th>Peso</th><th>Condición</th><th>Responsable</th><th>Estado</th><th></th></tr></thead><tbody>
+<?php foreach ($rows as $r):
+    $r['tipo'] = strtolower($r['tipo']); $r['peso_kg'] = $r['peso_actual']; $d = nh_derivar($r); ?>
+    <tr><td><?= emoji_mascota($r['tipo']).' '.e($r['nombre']) ?></td><td><?= e(ucfirst($r['tipo'])) ?></td><td><?= e($r['raza'] ?: '—') ?></td>
+        <td><?= $r['edad_anios'] !== null ? e(kg((float)$r['edad_anios'])).' a.' : '—' ?></td><td><?= e(kg((float)$r['peso_actual'])) ?> kg</td>
+        <td><?= e(['bajo' => 'Bajo peso', 'ideal' => 'Peso ideal', 'sobrepeso' => 'Sobrepeso'][$d['condicion']]) ?><?= $d['etapa'] === 'cachorro' ? ' (crece)' : '' ?></td>
+        <td><?= e($r['responsable']) ?></td><td><span class="badge-soft"><?= e($r['estado']) ?></span></td>
+        <td class="text-end"><?= admin_boton('estado', (int)$r['id'], $r['estado'] === 'activa' ? 'Desactivar' : 'Activar') ?></td></tr>
+<?php endforeach; ?>
+<?php if (!$rows): ?><tr><td colspan="9" class="muted text-center">Aún no hay mascotas registradas.</td></tr><?php endif; ?>
+</tbody></table></div></div>
+<?php admin_fin(); ?>

@@ -1,0 +1,29 @@
+<?php
+    require_once '../includes/auth.php';
+    require_once '../includes/mascotas.php';
+    require_once '../includes/admin_layout.php';
+    $u = requerir_admin('../');
+    $n = fn($sql) => (int)$pdo->query($sql)->fetchColumn();
+    $stats = [
+        'Usuarios activos' => $n("SELECT COUNT(*) FROM usuarios WHERE estado = 'activo'"),
+        'Mascotas' => $n("SELECT COUNT(*) FROM mascotas WHERE estado = 'activa'"),
+        'Mediciones de peso' => $n('SELECT COUNT(*) FROM registros_peso'),
+        'Transiciones en curso' => $n("SELECT COUNT(*) FROM transiciones WHERE estado = 'en_curso'"),
+        'Recetas publicadas' => $n("SELECT COUNT(*) FROM recetas WHERE estado = 'publicada'"),
+        'Artículos publicados' => $n("SELECT COUNT(*) FROM articulos WHERE estado = 'publicado'"),
+    ];
+    $recientes = $pdo->query('SELECT nombre, correo, creado_en FROM usuarios ORDER BY id DESC LIMIT 5')->fetchAll();
+    admin_inicio('Panel administrativo', 'Vista general del sistema.');
+?>
+<div class="row g-3">
+    <?php foreach ($stats as $lbl => $v): ?>
+        <div class="col-md-4"><div class="stat-card"><span class="muted"><?= e($lbl) ?></span><div class="stat-number"><?= $v ?></div></div></div>
+    <?php endforeach; ?>
+</div>
+<div class="nh-card mt-4">
+    <h5 class="fw-800">Últimos usuarios registrados</h5>
+    <table class="table mt-2"><thead><tr><th>Nombre</th><th>Correo</th><th>Registro</th></tr></thead><tbody>
+        <?php foreach ($recientes as $r): ?><tr><td><?= e($r['nombre']) ?></td><td><?= e($r['correo']) ?></td><td><?= e(fecha_es($r['creado_en'])) ?></td></tr><?php endforeach; ?>
+    </tbody></table>
+</div>
+<?php admin_fin(); ?>

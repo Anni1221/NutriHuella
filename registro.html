@@ -1,0 +1,111 @@
+<?php
+    require_once __DIR__.'/includes/auth.php';
+    $base = '';
+    if (usuario_actual()) redirigir('dashboard.html');
+
+    $errores = [];
+    $v = ['nombre' => '', 'correo' => ''];
+    if (!es_post() && isset($_GET['correo'])) $v['correo'] = strtolower(trim((string)$_GET['correo']));   // viene desde el inicio de sesión
+    if (es_post()) {
+        $v['nombre'] = trim(preg_replace('/\s+/u', ' ', $_POST['nombre'] ?? ''));
+        $v['correo'] = strtolower(trim($_POST['correo'] ?? ''));
+        $clave  = $_POST['clave'] ?? '';
+        $clave2 = $_POST['clave2'] ?? '';
+
+        if (!csrf_ok()) $errores[] = 'La sesión expiró, intenta de nuevo.';
+        if (!$pdo) $errores[] = 'No hay conexión con la base de datos. Verifica que MySQL esté iniciado.';
+        // Nombre completo: al menos nombre y apellido, solo letras (con tildes/ñ), espacios, apóstrofo, punto y guion.
+        if (mb_strlen($v['nombre']) > 120 || !preg_match('/^(?=(?:[^\p{L}]*\p{L}){2})\p{L}[\p{L}\'’.-]*(?: (?=(?:[^\p{L}]*\p{L}){2})\p{L}[\p{L}\'’.-]*)+$/u', $v['nombre']))
+            $errores[] = 'Escribe tu nombre completo (nombre y apellido), solo con letras. Ej.: María Pérez.';
+        // Correo: formato válido y dominio con extensión (usuario@dominio.com).
+        if (strlen($v['correo']) > 150 || !filter_var($v['correo'], FILTER_VALIDATE_EMAIL) || !preg_match('/^[^@]+@([a-z0-9-]+\.)+[a-z]{2,}$/i', $v['correo']))
+            $errores[] = 'El correo no es válido. Ej.: nombre@correo.com.';
+        if (strlen($clave) < 8) $errores[] = 'La contraseña debe tener al menos 8 caracteres.';
+        if (strlen($clave) > 72) $errores[] = 'La contraseña admite hasta 72 caracteres.';
+        if ($clave !== $clave2) $errores[] = 'Las contraseñas no coinciden.';
+
+        if (!$errores) {
+            $st = $pdo->prepare('SELECT 1 FROM usuarios WHERE correo = ?');
+            $st->execute([$v['correo']]);
+            if ($st->fetch()) {
+                $errores[] = 'Ya existe una cuenta con ese correo.';
+            } else {
+                $pdo->prepare('INSERT INTO usuarios (nombre, correo, password_hash, rol) VALUES (?,?,?,?)')
+                    ->execute([$v['nombre'], $v['correo'], password_hash($clave, PASSWORD_DEFAULT), 'usuario']);
+                iniciar_sesion((int)$pdo->lastInsertId());
+                flash('success', '¡Cuenta creada! Ahora registra a tu mascota.');
+                redirigir('mascota/registrar.html');
+            }
+        }
+    }
+
+    $pageTitle = 'Crear cuenta';
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <div class="form-card">
+                <h2 class="fw-800">
+                    Crea tu cuenta
+                </h2>
+                <p class="muted">
+                    Comienza registrando tus datos como responsable de la mascota.
+                </p>
+                <?php if ($errores): ?>
+                    <div class="alert alert-danger"><ul class="mb-0">
+                        <?php foreach ($errores as $er): ?><li><?= e($er) ?></li><?php endforeach; ?>
+                    </ul></div>
+                <?php endif; ?>
+                <form action="registro.html" method="post" id="form-registro" novalidate>
+                    <?= csrf_field() ?>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                Nombre completo
+                            </label>
+                            <input name="nombre" value="<?= e($v['nombre']) ?>" class="form-control" required maxlength="120" autocomplete="name" placeholder="Nombre y apellido">
+                            <div class="invalid-feedback">Escribe nombre y apellido, solo con letras.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                Correo
+                            </label>
+                            <input type="email" name="correo" value="<?= e($v['correo']) ?>" class="form-control" required maxlength="150" autocomplete="email" placeholder="correo@ejemplo.com">
+                            <div class="invalid-feedback">Escribe un correo válido, como nombre@correo.com.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                Contraseña
+                            </label>
+                            <div class="input-group">
+                                <input type="password" name="clave" id="clave" class="form-control" minlength="8" maxlength="72" required autocomplete="new-password">
+                                <button type="button" class="btn btn-outline-secondary" data-ver-clave="clave" aria-label="Mostrar contraseña">Mostrar</button>
+                                <div class="invalid-feedback">Mínimo 8 caracteres.</div>
+                            </div>
+                            <div class="form-text">Mínimo 8 caracteres.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                Confirmar contraseña
+                            </label>
+                            <div class="input-group">
+                                <input type="password" name="clave2" id="clave2" class="form-control" minlength="8" maxlength="72" required autocomplete="new-password">
+                                <button type="button" class="btn btn-outline-secondary" data-ver-clave="clave2" aria-label="Mostrar contraseña">Mostrar</button>
+                                <div class="invalid-feedback">Las contraseñas no coinciden.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary mt-4">
+                        Continuar con mi mascota 
+                        <i class="bi bi-arrow-right"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>

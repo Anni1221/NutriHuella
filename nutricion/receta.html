@@ -1,0 +1,72 @@
+<?php
+    $base = '../';
+    require_once $base.'includes/auth.php';
+    require_once $base.'includes/mascotas.php';
+    require_once $base.'includes/calculos.php';
+    require_once $base.'includes/contenido.php';
+    $u = usuario_actual();
+    $m = $u ? mascota_activa((int)$u['id']) : null;
+    $r = receta_por_id((int)($_GET['id'] ?? 0));
+    $pageTitle = 'Detalle de receta';
+    if (!$r) { http_response_code(404); $pageTitle = 'Receta no encontrada'; }
+    if ($r && $m) {
+        $alerg = alergenos_en($m['alergias'], $r['titulo'].' '.$r['ingredientes']);
+        $calc = nh_calcular($m + ['alimento' => 'natural', 'comidas' => $m['etapa'] === 'cachorro' || $m['tipo'] === 'gato' ? 3 : 2]);
+        $especie_ok = $r['especie'] === 'Ambos' || strtolower($r['especie']) === $m['tipo'];
+    }
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="container py-5">
+  <a href="recetas.html" class="muted">← Volver a recetas</a>
+  <?php if (!$r): ?>
+    <div class="nh-card mt-3">
+      <h1 class="fw-800">Receta no encontrada</h1>
+      <p class="muted">La receta que buscas no existe.</p>
+      <a href="recetas.html" class="btn btn-primary">Ver todas las recetas</a>
+    </div>
+  <?php else: ?>
+      <div class="row g-4 mt-1">
+        <div class="col-lg-5">
+          <div class="recipe-emoji" style="font-size:9rem"><?= emoji_receta($r) ?></div>
+        </div>
+        <div class="col-lg-7">
+          <span class="badge-soft"><?= e(etiqueta_especie($r['especie'])) ?> · <?= e($r['categoria'] ?: 'Receta') ?></span>
+          <h1 class="fw-800 mt-2"><?= e($r['titulo']) ?></h1>
+          <p class="muted"><?= e($r['descripcion']) ?> Propuesta educativa: las cantidades y la composición deben individualizarse.</p>
+
+          <?php if ($m): ?>
+            <?php if (!empty($alerg)): ?>
+              <div class="alert alert-warning">⚠️ Esta receta incluye <b><?= e(implode(', ', $alerg)) ?></b>, que registraste como alergia o sensibilidad de <?= e($m['nombre']) ?>.</div>
+            <?php endif; ?>
+            <?php if (!$especie_ok): ?>
+              <div class="alert alert-warning">Esta receta está pensada para <?= e(strtolower(etiqueta_especie($r['especie']))) ?>, no para <?= $m['tipo'] === 'gato' ? 'gatos' : 'perros' ?>.</div>
+            <?php endif; ?>
+            <div class="nh-card mt-3">
+              <h5 class="fw-800">Porción orientativa para <?= e($m['nombre']) ?></h5>
+              <p class="mb-1"><b><?= $calc['gramos_dia'] ?> g al día</b> (<?= $calc['comidas'] ?> comidas de ~<?= $calc['gramos_comida'] ?> g), si esta receta fuera su única comida.</p>
+              <p class="muted small mb-0">Calculado con su energía diaria de <?= $calc['der'] ?> kcal y ~150 kcal/100 g de comida natural. <a href="calculadora.html">Ajustar en la calculadora</a>.</p>
+            </div>
+          <?php endif; ?>
+
+          <div class="nh-card mt-3">
+            <h5 class="fw-800">Ingredientes</h5>
+            <ul class="mb-0"><?php foreach (lineas($r['ingredientes']) as $i): ?><li><?= e($i) ?></li><?php endforeach; ?></ul>
+          </div>
+          <div class="nh-card mt-3">
+            <h5 class="fw-800">Preparación</h5>
+            <ol class="mb-0"><?php foreach (lineas($r['preparacion']) as $p): ?><li><?= e($p) ?></li><?php endforeach; ?></ol>
+          </div>
+          <?php if ($r['advertencias']): ?>
+          <div class="nh-card mt-3">
+            <h5 class="fw-800">⚠️ Importante</h5>
+            <p class="mb-0"><?= e($r['advertencias']) ?></p>
+          </div>
+          <?php endif; ?>
+        </div>
+      </div>
+  <?php endif; ?>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>

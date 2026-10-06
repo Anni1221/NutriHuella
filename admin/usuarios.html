@@ -1,0 +1,25 @@
+<?php
+    require_once '../includes/auth.php';
+    require_once '../includes/mascotas.php';
+    require_once '../includes/admin_layout.php';
+    $u = requerir_admin('../');
+    if (es_post() && csrf_ok() && ($_POST['accion'] ?? '') === 'estado') {
+        $id = (int)$_POST['id'];
+        if ($id === (int)$u['id']) flash('warning', 'No puedes desactivar tu propia cuenta.');
+        else { $pdo->prepare("UPDATE usuarios SET estado = CASE estado WHEN 'activo' THEN 'inactivo' ELSE 'activo' END WHERE id = ?")->execute([$id]); flash('success', 'Estado actualizado.'); }
+        redirigir('usuarios.html');
+    }
+    $rows = $pdo->query("SELECT u.id, u.nombre, u.correo, u.rol, u.estado, u.creado_en,
+                         (SELECT COUNT(*) FROM mascotas m WHERE m.usuario_id = u.id AND m.estado = 'activa') AS mascotas
+                         FROM usuarios u ORDER BY u.id DESC")->fetchAll();
+    admin_inicio('Usuarios', 'Gestión de cuentas registradas.');
+?>
+<div class="nh-card"><div class="table-responsive">
+<table class="table align-middle"><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Mascotas</th><th>Registro</th><th>Estado</th><th></th></tr></thead><tbody>
+<?php foreach ($rows as $r): ?>
+    <tr><td><?= e($r['nombre']) ?></td><td><?= e($r['correo']) ?></td><td><?= e($r['rol']) ?></td><td><?= (int)$r['mascotas'] ?></td><td><?= e(fecha_es($r['creado_en'])) ?></td>
+        <td><span class="badge-soft"><?= e($r['estado']) ?></span></td>
+        <td class="text-end"><?= (int)$r['id'] === (int)$u['id'] ? '' : admin_boton('estado', (int)$r['id'], $r['estado'] === 'activo' ? 'Desactivar' : 'Activar') ?></td></tr>
+<?php endforeach; ?>
+</tbody></table></div></div>
+<?php admin_fin(); ?>

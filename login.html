@@ -1,0 +1,90 @@
+<?php
+    require_once __DIR__.'/includes/auth.php';
+    $base = '';
+    if (usuario_actual()) redirigir('dashboard.html');
+
+    $error = null;
+    $no_existe = false;   // si el correo no está registrado, se ofrece ir al registro
+    $correo = '';
+    if (es_post()) {
+        $correo = strtolower(trim($_POST['correo'] ?? ''));
+        $clave  = $_POST['clave'] ?? '';
+        if (!csrf_ok()) {
+            $error = 'La sesión expiró, intenta de nuevo.';
+        } elseif (!$pdo) {
+            $error = 'No hay conexión con la base de datos. Verifica que MySQL esté iniciado.';
+        } else {
+            $st = $pdo->prepare('SELECT id, password_hash, rol, estado FROM usuarios WHERE correo = ?');
+            $st->execute([$correo]);
+            $u = $st->fetch();
+            if (!filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+                $error = 'Escribe un correo válido.';
+            } elseif (!$u) {
+                $error = 'No existe una cuenta con el correo '.$correo.'.';
+                $no_existe = true;
+            } elseif ($u['estado'] !== 'activo') {
+                $error = 'Tu cuenta está desactivada. Contacta al administrador.';
+            } elseif (!password_verify($clave, $u['password_hash'])) {
+                $error = 'La contraseña es incorrecta. Inténtalo de nuevo.';
+            } else {
+                iniciar_sesion((int)$u['id']);
+                redirigir($u['rol'] === 'admin' ? 'admin/dashboard.html' : 'dashboard.html');
+            }
+        }
+    }
+
+    $pageTitle = 'Iniciar sesión';
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="container login-wrap">
+    <div class="login-card w-100">
+        <div class="form-card">
+            <div class="text-center mb-4">
+                <div class="pet-avatar mx-auto mb-3">
+                    🐾
+                </div>
+                <h2 class="fw-800">
+                    Bienvenido a NutriHuella
+                </h2>
+                <p class="muted">
+                    Ingresa para continuar.
+                </p>
+            </div>
+            <?php if ($error): ?>
+                <div class="alert alert-danger">
+                    <?= e($error) ?>
+                    <?php if ($no_existe): ?>
+                        <div class="mt-2"><a class="btn btn-sm btn-primary" href="registro.html?correo=<?= urlencode($correo) ?>">Crear mi cuenta</a></div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+            <form action="login.html" method="post">
+                <?= csrf_field() ?>
+                <label class="form-label fw-bold">
+                    Correo electrónico
+                </label>
+                <input type="email" name="correo" value="<?= e($correo) ?>" class="form-control mb-3" placeholder="correo@ejemplo.com" required>
+                <label class="form-label fw-bold">
+                    Contraseña
+                </label>
+                <div class="input-group mb-4">
+                    <input type="password" name="clave" id="clave" class="form-control" placeholder="••••••••" required>
+                    <button type="button" class="btn btn-outline-secondary" data-ver-clave="clave" aria-label="Mostrar contraseña">Mostrar</button>
+                </div>
+                <button class="btn btn-primary w-100">
+                    Ingresar
+                </button>
+            </form>
+            <p class="text-center mt-3 mb-0">
+                ¿No tienes cuenta? 
+                <a class="fw-bold" href="registro.html" style="color:var(--green)">
+                    Regístrate
+                </a>
+            </p>
+        </div>
+    </div>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>

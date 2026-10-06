@@ -1,0 +1,110 @@
+<?php
+    $base = '../';
+    require_once $base.'includes/auth.php';
+    require_once $base.'includes/mascotas.php';
+    require_once $base.'includes/calculos.php';
+    require_once $base.'includes/seguimiento.php';
+    [$u, $m] = requerir_mascota($base);
+    $mid = (int)$m['id'];
+
+    $errores = [];
+    $fecha = date('Y-m-d');
+    $peso = '';
+    if (es_post()) {
+        if (!csrf_ok()) {
+            $errores[] = 'La sesión expiró, intenta de nuevo.';
+        } elseif (($_POST['accion'] ?? '') === 'borrar') {
+            $pdo->prepare('DELETE FROM registros_peso WHERE id = ? AND mascota_id = ?')->execute([(int)($_POST['id'] ?? 0), $mid]);
+            sincronizar_peso($mid);
+            flash('success', 'Medición eliminada.');
+            redirigir('peso.html');
+        } else {
+            $fecha = $_POST['fecha'] ?? '';
+            $peso = (float)str_replace(',', '.', $_POST['peso'] ?? '0');
+            $d = DateTime::createFromFormat('Y-m-d', $fecha);
+            if (!$d || $d->format('Y-m-d') !== $fecha) $errores[] = 'La fecha no es válida.';
+            elseif ($fecha > date('Y-m-d')) $errores[] = 'La fecha no puede ser futura.';
+            elseif ($fecha < '2000-01-01') $errores[] = 'La fecha es demasiado antigua.';
+            if ($peso < 0.1 || $peso > 120) $errores[] = 'El peso debe estar entre 0.1 y 120 kg.';
+            if (!$errores) {
+                $pdo->prepare('INSERT INTO registros_peso (mascota_id, fecha, peso) VALUES (?,?,?)')->execute([$mid, $fecha, $peso]);
+                sincronizar_peso($mid);
+                $nuevo = mascota_activa((int)$u['id']);
+                $txt = ['bajo' => 'ahora está por debajo de su rango ideal', 'ideal' => 'está dentro de su rango ideal', 'sobrepeso' => 'está por encima de su rango ideal'][$nuevo['condicion']];
+                flash('success', 'Peso registrado. Con '.kg((float)$nuevo['peso_kg']).' kg, '.$m['nombre'].' '.($nuevo['etapa'] === 'cachorro' ? 'sigue en crecimiento.' : $txt.'.'));
+                redirigir('peso.html');
+            }
+        }
+    }
+
+    $pesos = pesos_de($mid);
+    $a = analizar_peso($m, $pesos);
+    // Variación de cada medición respecto a la anterior (en orden cronológico)
+    $filas = [];
+    foreach ($pesos as $i => $p) $filas[] = $p + ['var' => $i ? round($p['peso'] - $pesos[$i - 1]['peso'], 2) : null];
+    $filas = array_reverse($filas);
+
+    $pageTitle = 'Registro de peso';
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="page-head"><div class="container"><h1>Registro de peso de <?= e($m['nombre']) ?> ⚖️</h1><p class="muted mb-0">Mantén un historial para observar tendencias.</p></div></div>
+<div class="container pb-5">
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="form-card">
+                <h4 class="fw-800">Nueva medición</h4>
+                <?php if ($errores): ?>
+                    <div class="alert alert-danger mt-3"><ul class="mb-0"><?php foreach ($errores as $er): ?><li><?= e($er) ?></li><?php endforeach; ?></ul></div>
+                <?php endif; ?>
+                <form method="post" action="peso.html">
+                    <?= csrf_field() ?>
+                    <label class="form-label fw-bold mt-3">Fecha</label>
+                    <input type="date" name="fecha" class="form-control" value="<?= e($fecha) ?>" max="<?= date('Y-m-d') ?>" required>
+                    <label class="form-label fw-bold mt-3">Peso (kg)</label>
+                    <input type="number" name="peso" step=".01" min="0.1" max="120" class="form-control" placeholder="<?= e(kg((float)$m['peso_kg'])) ?>" value="<?= e($peso) ?>" required>
+                    <button class="btn btn-primary mt-4 w-100">Registrar peso</button>
+                </form>
+                <p class="muted small mt-3 mb-0">
+                    Rango ideal estimado para <?= e($m['nombre']) ?>: <b><?= e($m['rango_min']) ?>–<?= e($m['rango_max']) ?> kg</b>
+                    (<?= $m['raza_conocida'] ? 'según su raza' : 'según su tamaño' ?>).
+                </p>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="nh-card">
+                <h5 class="fw-800">Historial</h5>
+                <?php if (!$filas): ?>
+                    <p class="muted mt-3 mb-0">Aún no hay mediciones. Registra la primera con el formulario.</p>
+                <?php else: ?>
+                    <div class="table-responsive">
+                    <table class="table mt-3 align-middle">
+                        <thead><tr><th>Fecha</th><th>Peso</th><th>Variación</th><th></th></tr></thead>
+                        <tbody>
+                        <?php foreach ($filas as $f): ?>
+                            <tr>
+                                <td><?= e(fecha_es($f['fecha'])) ?></td>
+                                <td><?= e(kg($f['peso'])) ?> kg</td>
+                                <td><?= $f['var'] === null ? '—' : ($f['var'] > 0 ? '+' : '').e(kg($f['var'])).' kg' ?></td>
+                                <td class="text-end">
+                                    <form method="post" action="peso.html" class="d-inline">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="accion" value="borrar">
+                                        <input type="hidden" name="id" value="<?= $f['id'] ?>">
+                                        <button class="btn btn-sm btn-primary-soft" data-confirm="¿Eliminar esta medición?" title="Eliminar">🗑</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    </div>
+                    <a href="progreso.html" class="btn btn-primary-soft">Ver progreso 📈</a>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>

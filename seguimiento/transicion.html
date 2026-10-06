@@ -1,0 +1,123 @@
+<?php
+    $base = '../';
+    require_once $base.'includes/auth.php';
+    require_once $base.'includes/mascotas.php';
+    require_once $base.'includes/calculos.php';
+    require_once $base.'includes/seguimiento.php';
+    [$u, $m] = requerir_mascota($base);
+    $mid = (int)$m['id'];
+    $t = transicion_de($mid);
+    $errores = [];
+
+    if (es_post()) {
+        $acc = $_POST['accion'] ?? '';
+        if (!csrf_ok()) {
+            $errores[] = 'La sesión expiró, intenta de nuevo.';
+        } elseif ($acc === 'iniciar' && !($t && $t['estado'] !== 'completada')) {
+            $inicio = $_POST['fecha_inicio'] ?? '';
+            $d = DateTime::createFromFormat('Y-m-d', $inicio);
+            $alim = $_POST['alimento_actual'] ?? '';
+            if (!$d || $d->format('Y-m-d') !== $inicio) $errores[] = 'La fecha de inicio no es válida.';
+            if (!isset(NH_ALIMENTOS[$alim]) || $alim === 'natural') $errores[] = 'Elige el alimento que come actualmente.';
+            if (!$errores) {
+                transicion_crear($mid, $inicio, $alim);
+                flash('success', 'Plan de transición iniciado para '.$m['nombre'].'.');
+                redirigir('transicion.html');
+            }
+        } elseif ($t && $acc === 'completar') {
+            $semana = (int)($_POST['semana'] ?? 0);
+            if ($t['actual'] === $semana && $t['estado'] === 'en_curso') {
+                $obs = mb_substr(trim($_POST['observaciones'] ?? ''), 0, 1000);
+                $pdo->prepare('UPDATE transicion_etapas SET completado = 1, observaciones = ? WHERE transicion_id = ? AND semana = ?')->execute([$obs ?: null, $t['id'], $semana]);
+                if ($t['hechas'] + 1 >= $t['total']) $pdo->prepare("UPDATE transiciones SET estado = 'completada' WHERE id = ?")->execute([$t['id']]);
+                flash('success', $t['hechas'] + 1 >= $t['total'] ? '¡Transición completada!' : 'Semana '.$semana.' completada.');
+            }
+            redirigir('transicion.html');
+        } elseif ($t && in_array($acc, ['pausar', 'reanudar'], true) && $t['estado'] !== 'completada') {
+            $pdo->prepare('UPDATE transiciones SET estado = ? WHERE id = ?')->execute([$acc === 'pausar' ? 'pausada' : 'en_curso', $t['id']]);
+            redirigir('transicion.html');
+        } elseif ($t && $acc === 'cancelar') {
+            $pdo->prepare('DELETE FROM transiciones WHERE id = ?')->execute([$t['id']]);
+            flash('info', 'Plan eliminado. Puedes iniciar uno nuevo cuando quieras.');
+            redirigir('transicion.html');
+        }
+    }
+
+    $pageTitle = 'Plan de transición';
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="page-head"><div class="container"><h1>Transición digestiva de <?= e($m['nombre']) ?> 🔄</h1><p class="muted mb-0">Un cambio gradual permite observar la tolerancia de la mascota.</p></div></div>
+<div class="container pb-5">
+<?php if ($errores): ?>
+    <div class="alert alert-danger"><ul class="mb-0"><?php foreach ($errores as $er): ?><li><?= e($er) ?></li><?php endforeach; ?></ul></div>
+<?php endif; ?>
+
+<?php if (!$t): ?>
+    <div class="form-card" style="max-width:640px">
+        <h4 class="fw-800">Iniciar plan de 4 semanas</h4>
+        <p class="muted">Calcularemos cuánto de la nueva alimentación (comida natural) y cuánto de la actual debe recibir <?= e($m['nombre']) ?> cada semana, según su energía diaria (<b><?= nh_calcular($m + ['alimento' => 'natural', 'comidas' => 1])['der'] ?> kcal</b>).</p>
+        <form method="post" action="transicion.html">
+            <?= csrf_field() ?>
+            <input type="hidden" name="accion" value="iniciar">
+            <label class="form-label fw-bold">Alimento actual</label>
+            <select name="alimento_actual" class="form-select mb-3">
+                <?php foreach (NH_ALIMENTOS as $k => [$lbl, $kc]): if ($k === 'natural') continue; ?>
+                    <option value="<?= $k ?>"><?= e($lbl) ?> (~<?= $kc ?> kcal/100 g)</option>
+                <?php endforeach; ?>
+            </select>
+            <label class="form-label fw-bold">Fecha de inicio</label>
+            <input type="date" name="fecha_inicio" class="form-control mb-3" value="<?= date('Y-m-d') ?>" required>
+            <button class="btn btn-primary">Iniciar transición</button>
+        </form>
+    </div>
+<?php else: ?>
+    <?php $pausada = $t['estado'] === 'pausada'; $completa = $t['estado'] === 'completada'; ?>
+    <div class="nh-card mb-4">
+        <div class="d-flex justify-content-between"><b>Progreso actual<?= $pausada ? ' (en pausa)' : '' ?></b><b><?= $t['pct'] ?>%</b></div>
+        <div class="progress mt-2"><div class="progress-bar" style="width:<?= $t['pct'] ?>%"></div></div>
+        <p class="muted small mt-2 mb-0">Inicio: <?= e(fecha_es($t['fecha_inicio'])) ?> · Alimento actual: <?= e(NH_ALIMENTOS[$t['alimento_actual']][0]) ?></p>
+    </div>
+    <div class="timeline">
+    <?php foreach ($t['etapas'] as $et):
+        $sem = (int)$et['semana'];
+        $ini = date('Y-m-d', strtotime($t['fecha_inicio'].' +'.(($sem - 1) * 7).' days'));
+        $fin = date('Y-m-d', strtotime($ini.' +6 days'));
+        $es_actual = !$completa && $t['actual'] === $sem;
+        $plan = plan_semana($m, $t['alimento_actual'], (int)$et['porcentaje_nuevo']);
+        $estado = $et['completado'] ? 'Completada' : ($es_actual ? 'Actual' : 'Pendiente');
+        $desc = NH_SEMANAS[$sem][2] ?? ''; ?>
+        <div class="timeline-item">
+            <span class="badge-soft">Semana <?= $sem ?> · <?= $estado ?></span>
+            <span class="muted small ms-2"><?= e(fecha_es($ini)) ?> – <?= e(fecha_es($fin)) ?></span>
+            <h4 class="fw-800 mt-2"><?= e($et['titulo']) ?></h4>
+            <p class="muted"><?= e($desc) ?></p>
+            <p class="mb-2"><b><?= (int)$et['porcentaje_nuevo'] ?>% alimentación nueva</b> ·
+                <?= $plan['g_nuevo'] ?> g/día de <?= e(strtolower(NH_ALIMENTOS['natural'][0])) ?>
+                <?= $plan['g_actual'] > 0 ? '+ '.$plan['g_actual'].' g/día de '.e(strtolower(NH_ALIMENTOS[$t['alimento_actual']][0])) : '' ?></p>
+            <?php if ($et['completado'] && $et['observaciones']): ?><p class="muted small">Observaciones: <?= e($et['observaciones']) ?></p><?php endif; ?>
+            <?php if ($es_actual && !$pausada): ?>
+                <form method="post" action="transicion.html">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="accion" value="completar">
+                    <input type="hidden" name="semana" value="<?= $sem ?>">
+                    <textarea name="observaciones" class="form-control mb-2" rows="2" maxlength="1000" placeholder="Observaciones (apetito, heces, energía...)"></textarea>
+                    <button class="btn btn-primary">Marcar semana como completada</button>
+                    <a href="peso.html" class="btn btn-primary-soft">Registrar peso</a>
+                </form>
+            <?php endif; ?>
+        </div>
+    <?php endforeach; ?>
+    </div>
+    <form method="post" action="transicion.html" class="mt-4 d-flex gap-2">
+        <?= csrf_field() ?>
+        <?php if (!$completa): ?>
+            <button class="btn btn-primary-soft" name="accion" value="<?= $pausada ? 'reanudar' : 'pausar' ?>"><?= $pausada ? 'Reanudar plan' : 'Pausar plan' ?></button>
+        <?php endif; ?>
+        <button class="btn btn-primary-soft" name="accion" value="cancelar" data-confirm="¿Eliminar este plan y su progreso?"><?= $completa ? 'Empezar de nuevo' : 'Eliminar plan' ?></button>
+    </form>
+<?php endif; ?>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>

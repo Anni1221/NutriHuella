@@ -1,0 +1,39 @@
+<?php
+    $base = '../';
+    require_once $base.'includes/auth.php';
+    require_once $base.'includes/mascotas.php';
+    require_once $base.'includes/contenido.php';
+    $arts = articulos_publicados();
+    $u = usuario_actual();
+    $m = $u ? mascota_activa((int)$u['id']) : null;
+    $pageTitle = 'Artículos educativos';
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="page-head">
+    <div class="container">
+        <h1>Zona educativa 📚</h1>
+        <p class="muted mb-0">Contenido para aprender y tomar decisiones informadas.</p>
+    </div>
+</div>
+<div class="container pb-5">
+    <?php if ($m && ($m['condicion'] !== 'ideal' && $m['etapa'] !== 'cachorro')): ?>
+        <div class="alert alert-info">Según el último peso registrado, <?= e($m['nombre']) ?> está en <b><?= $m['condicion'] === 'sobrepeso' ? 'sobrepeso' : 'bajo peso' ?></b>. Te recomendamos leer sobre nutrición y consultar con tu veterinario.</div>
+    <?php endif; ?>
+    <?php if (!$arts): ?><div class="nh-card text-center py-5"><p class="muted mb-0">Aún no hay artículos publicados.</p></div><?php endif; ?>
+    <div class="row g-4">
+        <?php foreach ($arts as $a): ?>
+            <div class="col-md-4">
+                <div class="article-card">
+                    <span class="badge-soft"><?= e($a['categoria'] ?: 'General') ?></span>
+                    <h4 class="fw-800 mt-3"><?= e($a['titulo']) ?></h4>
+                    <p class="muted"><?= e($a['resumen']) ?></p>
+                    <a href="articulo.html?id=<?= (int)$a['id'] ?>" class="btn btn-primary-soft">Leer artículo</a>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>

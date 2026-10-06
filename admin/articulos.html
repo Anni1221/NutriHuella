@@ -1,0 +1,48 @@
+<?php
+    require_once '../includes/auth.php';
+    require_once '../includes/mascotas.php';
+    require_once '../includes/contenido.php';
+    require_once '../includes/admin_layout.php';
+    $u = requerir_admin('../');
+    contenido_sembrar();
+    $errores = [];
+    $v = ['titulo' => '', 'categoria' => '', 'resumen' => '', 'contenido' => ''];
+    if (es_post() && csrf_ok()) {
+        if (($_POST['accion'] ?? '') === 'estado') {
+            $pdo->prepare("UPDATE articulos SET estado = CASE estado WHEN 'publicado' THEN 'borrador' ELSE 'publicado' END WHERE id = ?")->execute([(int)$_POST['id']]);
+            redirigir('articulos.html');
+        }
+        if (($_POST['accion'] ?? '') === 'crear') {
+            foreach ($v as $k => $_) $v[$k] = trim($_POST[$k] ?? '');
+            if ($v['titulo'] === '' || mb_strlen($v['titulo']) > 180) $errores[] = 'El título es obligatorio (máx. 180 caracteres).';
+            if (mb_strlen($v['resumen']) > 300) $errores[] = 'El resumen admite hasta 300 caracteres.';
+            if ($v['contenido'] === '') $errores[] = 'Escribe el contenido del artículo.';
+            if (!$errores) {
+                $pdo->prepare("INSERT INTO articulos (titulo, categoria, resumen, contenido, autor_id, estado, fecha) VALUES (?,?,?,?,?, 'borrador', ?)")
+                    ->execute([$v['titulo'], mb_substr($v['categoria'], 0, 60) ?: null, $v['resumen'] ?: null, $v['contenido'], $u['id'], date('Y-m-d')]);
+                flash('success', 'Artículo creado como borrador. Publícalo cuando esté listo.');
+                redirigir('articulos.html');
+            }
+        }
+    }
+    $rows = $pdo->query('SELECT id, titulo, categoria, fecha, estado FROM articulos ORDER BY fecha DESC, id DESC')->fetchAll();
+    admin_inicio('Artículos', 'Gestión de contenido educativo.');
+?>
+<?php if ($errores): ?><div class="alert alert-danger"><ul class="mb-0"><?php foreach ($errores as $er): ?><li><?= e($er) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
+<details class="nh-card mb-3" <?= $errores ? 'open' : '' ?>><summary class="fw-bold">+ Nuevo artículo</summary>
+<form method="post" class="mt-3"><?= csrf_field() ?><input type="hidden" name="accion" value="crear">
+  <div class="row g-3">
+    <div class="col-md-8"><label class="form-label fw-bold">Título</label><input name="titulo" class="form-control" value="<?= e($v['titulo']) ?>" maxlength="180" required></div>
+    <div class="col-md-4"><label class="form-label fw-bold">Categoría</label><input name="categoria" class="form-control" value="<?= e($v['categoria']) ?>" maxlength="60"></div>
+    <div class="col-12"><label class="form-label fw-bold">Resumen</label><input name="resumen" class="form-control" value="<?= e($v['resumen']) ?>" maxlength="300"></div>
+    <div class="col-12"><label class="form-label fw-bold">Contenido</label><textarea name="contenido" class="form-control" rows="8" required><?= e($v['contenido']) ?></textarea>
+        <div class="form-text">Para crear secciones, empieza una línea con <code>## Título de la sección</code>.</div></div>
+  </div><button class="btn btn-primary mt-3">Guardar borrador</button></form></details>
+<div class="nh-card"><div class="table-responsive">
+<table class="table align-middle"><thead><tr><th>Título</th><th>Categoría</th><th>Fecha</th><th>Estado</th><th></th></tr></thead><tbody>
+<?php foreach ($rows as $r): ?>
+    <tr><td><?= e($r['titulo']) ?></td><td><?= e($r['categoria'] ?: '—') ?></td><td><?= e(fecha_es($r['fecha'])) ?></td><td><span class="badge-soft"><?= e($r['estado']) ?></span></td>
+        <td class="text-end"><?= admin_boton('estado', (int)$r['id'], $r['estado'] === 'publicado' ? 'Pasar a borrador' : 'Publicar') ?></td></tr>
+<?php endforeach; ?>
+</tbody></table></div></div>
+<?php admin_fin(); ?>

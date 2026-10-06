@@ -1,0 +1,51 @@
+<?php
+    require_once '../includes/auth.php';
+    require_once '../includes/mascotas.php';
+    require_once '../includes/contenido.php';
+    require_once '../includes/admin_layout.php';
+    $u = requerir_admin('../');
+    contenido_sembrar();
+    $errores = [];
+    $v = ['titulo' => '', 'especie' => 'Ambos', 'categoria' => '', 'descripcion' => '', 'ingredientes' => '', 'preparacion' => '', 'advertencias' => ''];
+    if (es_post() && csrf_ok()) {
+        if (($_POST['accion'] ?? '') === 'estado') {
+            $pdo->prepare("UPDATE recetas SET estado = CASE estado WHEN 'publicada' THEN 'borrador' ELSE 'publicada' END WHERE id = ?")->execute([(int)$_POST['id']]);
+            redirigir('recetas.html');
+        }
+        if (($_POST['accion'] ?? '') === 'crear') {
+            foreach ($v as $k => $_) $v[$k] = trim($_POST[$k] ?? '');
+            if ($v['titulo'] === '' || mb_strlen($v['titulo']) > 150) $errores[] = 'El título es obligatorio (máx. 150 caracteres).';
+            if (!in_array($v['especie'], ['Perro', 'Gato', 'Ambos'], true)) $errores[] = 'Especie no válida.';
+            if ($v['ingredientes'] === '' || $v['preparacion'] === '') $errores[] = 'Indica los ingredientes y la preparación (uno por línea).';
+            if (!$errores) {
+                $pdo->prepare("INSERT INTO recetas (titulo, especie, categoria, descripcion, ingredientes, preparacion, advertencias, estado) VALUES (?,?,?,?,?,?,?, 'borrador')")
+                    ->execute([$v['titulo'], $v['especie'], mb_substr($v['categoria'], 0, 60) ?: null, $v['descripcion'] ?: null, $v['ingredientes'], $v['preparacion'], $v['advertencias'] ?: null]);
+                flash('success', 'Receta creada como borrador. Publícala cuando esté lista.');
+                redirigir('recetas.html');
+            }
+        }
+    }
+    $rows = $pdo->query('SELECT id, titulo, especie, categoria, estado FROM recetas ORDER BY id DESC')->fetchAll();
+    admin_inicio('Recetas', 'Gestión de recetas del sistema.');
+?>
+<?php if ($errores): ?><div class="alert alert-danger"><ul class="mb-0"><?php foreach ($errores as $er): ?><li><?= e($er) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
+<details class="nh-card mb-3" <?= $errores ? 'open' : '' ?>><summary class="fw-bold">+ Nueva receta</summary>
+<form method="post" class="mt-3"><?= csrf_field() ?><input type="hidden" name="accion" value="crear">
+  <div class="row g-3">
+    <div class="col-md-8"><label class="form-label fw-bold">Título</label><input name="titulo" class="form-control" value="<?= e($v['titulo']) ?>" maxlength="150" required></div>
+    <div class="col-md-4"><label class="form-label fw-bold">Especie</label><select name="especie" class="form-select">
+        <?php foreach (['Ambos' => 'Perros y gatos', 'Perro' => 'Perros', 'Gato' => 'Gatos'] as $k => $l): ?><option value="<?= $k ?>" <?= $v['especie'] === $k ? 'selected' : '' ?>><?= $l ?></option><?php endforeach; ?></select></div>
+    <div class="col-md-6"><label class="form-label fw-bold">Categoría</label><input name="categoria" class="form-control" value="<?= e($v['categoria']) ?>" maxlength="60"></div>
+    <div class="col-md-6"><label class="form-label fw-bold">Descripción</label><input name="descripcion" class="form-control" value="<?= e($v['descripcion']) ?>"></div>
+    <div class="col-md-6"><label class="form-label fw-bold">Ingredientes (uno por línea)</label><textarea name="ingredientes" class="form-control" rows="5" required><?= e($v['ingredientes']) ?></textarea></div>
+    <div class="col-md-6"><label class="form-label fw-bold">Preparación (un paso por línea)</label><textarea name="preparacion" class="form-control" rows="5" required><?= e($v['preparacion']) ?></textarea></div>
+    <div class="col-12"><label class="form-label fw-bold">Advertencias</label><textarea name="advertencias" class="form-control" rows="2"><?= e($v['advertencias']) ?></textarea></div>
+  </div><button class="btn btn-primary mt-3">Guardar borrador</button></form></details>
+<div class="nh-card"><div class="table-responsive">
+<table class="table align-middle"><thead><tr><th>Título</th><th>Especie</th><th>Categoría</th><th>Estado</th><th></th></tr></thead><tbody>
+<?php foreach ($rows as $r): ?>
+    <tr><td><?= e($r['titulo']) ?></td><td><?= e(etiqueta_especie($r['especie'])) ?></td><td><?= e($r['categoria'] ?: '—') ?></td><td><span class="badge-soft"><?= e($r['estado']) ?></span></td>
+        <td class="text-end"><?= admin_boton('estado', (int)$r['id'], $r['estado'] === 'publicada' ? 'Pasar a borrador' : 'Publicar') ?></td></tr>
+<?php endforeach; ?>
+</tbody></table></div></div>
+<?php admin_fin(); ?>

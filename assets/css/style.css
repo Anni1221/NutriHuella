@@ -1,0 +1,36 @@
+:root{
+--green:#3f705b;--green2:#6f9f86;--mint:#eaf4ee;--cream:#fbfaf5;--ink:#26352d;
+--muted:#68766f;--line:#dfe8e2;--white:#fff;--orange:#d99a5b;--rose:#d98282;
+}
+*{box-sizing:border-box} body{display:flex;flex-direction:column;min-height:100vh;overflow-x:clip;font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);line-height:1.65}
+a{text-decoration:none}.fw-800{font-weight:800}.nh-navbar{background:rgba(255,255,255,.96);border-bottom:1px solid var(--line);box-shadow:0 3px 18px rgba(30,60,45,.05)}
+.navbar-brand{font-size:1.45rem;color:var(--green)}.navbar-brand span:last-child{color:var(--orange)}.brand-paw{font-size:1.2rem;margin-right:5px}
+.nav-link{color:#405047!important;font-weight:700}.nav-link:hover{color:var(--green)!important}
+.btn-primary{background:var(--green);border-color:var(--green);border-radius:12px;padding:.7rem 1.1rem;font-weight:800}.btn-primary:hover{background:#315845;border-color:#315845}
+.btn-primary-soft{background:var(--mint);color:var(--green);border-radius:12px;font-weight:800;padding:.6rem 1rem}.btn-primary-soft:hover{background:#dcece2;color:#2f5d49}
+.hero{padding:70px 0 55px;background:linear-gradient(135deg,#edf7ef 0%,#fbfaf5 62%)}.hero h1{font-size:clamp(2.3rem,5vw,4rem);font-weight:800;line-height:1.08}
+.hero p{font-size:1.12rem;color:var(--muted);max-width:650px}.hero-pet{font-size:8rem;text-align:center;filter:drop-shadow(0 15px 15px rgba(50,80,60,.12))}
+.section-title{font-weight:800}.section-sub{color:var(--muted)}
+.nh-card,.stat-card,.form-card,.recipe-card,.article-card{background:var(--white);border:1px solid var(--line);border-radius:20px;padding:24px;box-shadow:0 8px 28px rgba(36,63,48,.055)}
+/* Igualar alturas solo cuando la tarjeta es hija directa de una columna */
+[class*="col-"]>.nh-card:only-child,[class*="col-"]>.stat-card:only-child,[class*="col-"]>.form-card:only-child,[class*="col-"]>.recipe-card:only-child,[class*="col-"]>.article-card:only-child{height:100%}
+.nh-card:hover,.recipe-card:hover,.article-card:hover{transform:translateY(-3px);transition:.2s;box-shadow:0 12px 30px rgba(36,63,48,.09)}
+.icon-box{width:52px;height:52px;border-radius:15px;background:var(--mint);display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin-bottom:16px}
+.stat-number{font-size:2rem;font-weight:800;color:var(--green)}.muted{color:var(--muted)}
+.badge-soft{background:var(--mint);color:var(--green);padding:7px 11px;border-radius:30px;font-weight:800}
+.progress{height:10px;border-radius:10px;background:#e7eee9}.progress-bar{background:var(--green);border-radius:10px}
+.pet-avatar{width:90px;height:90px;border-radius:50%;background:#f3eadb;display:flex;align-items:center;justify-content:center;font-size:3.5rem}
+.form-control,.form-select{border:1px solid #d7e2db;border-radius:12px;padding:.75rem .9rem}.form-control:focus,.form-select:focus{border-color:var(--green);box-shadow:0 0 0 .2rem rgba(63,112,91,.12)}
+.page-head{background:#edf5ef;padding:42px 0;margin-bottom:30px}.page-head h1{font-weight:800}
+.step{display:flex;gap:15px;align-items:flex-start}.step-num{min-width:38px;height:38px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800}
+.timeline{border-left:3px solid #dbe9df;padding-left:25px}.timeline-item{position:relative;margin-bottom:28px}.timeline-item:before{content:"";position:absolute;left:-34px;top:5px;width:15px;height:15px;background:var(--green);border-radius:50%;border:3px solid var(--cream)}
+.table{vertical-align:middle}.nh-footer{background:#263b31;color:#dce8e0;flex-shrink:0}
+body>:not(footer):not(script){flex-shrink:0}
+body>footer.nh-footer{margin-top:auto!important}
+body>footer.nh-footer:before{content:"";display:block}
+.nh-footer .container{padding-top:1.5rem}
+.table-responsive,.table{max-width:100%}
+.hero-pet{overflow-wrap:anywhere}.nh-footer a{display:block;color:#dce8e0;margin:5px 0}.nh-footer p{color:#bdcdc4}
+.login-wrap{min-height:78vh;display:flex;align-items:center}.login-card{max-width:470px;margin:auto}
+.recipe-emoji{font-size:4rem;background:#f4f0e6;border-radius:18px;padding:15px;text-align:center}.admin-nav{background:#253c31;color:white;border-radius:18px;padding:18px}.admin-nav a{color:#dce9e0;display:block;padding:9px;border-radius:9px}.admin-nav a:hover{background:#345345}
+@media(max-width:768px){.row{--bs-gutter-x:1.5rem}.hero .row.g-5{--bs-gutter-x:1.5rem}.hero{padding:45px 0}.hero-pet{font-size:6rem}.nh-card{padding:20px}}

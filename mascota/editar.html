@@ -1,0 +1,59 @@
+<?php
+    $base = '../';
+    require_once $base.'includes/auth.php';
+    require_once $base.'includes/mascotas.php';
+    $u = requerir_login($base);
+
+    $actual = mascota_activa((int)$u['id']);
+    if (!$actual) { flash('info', 'Primero registra a tu mascota.'); redirigir('registrar.html'); }
+
+    $m = $actual;
+    $errores = [];
+    if (es_post()) {
+        $m = mascota_desde_post();
+        $errores = csrf_ok() ? mascota_validar($m) : ['La sesión expiró, intenta de nuevo.'];
+        if (!$errores) {
+            $m = array_merge($m, nh_derivar($m));   // etapa, actividad y condición calculadas
+            $pdo->beginTransaction();
+            $pdo->prepare('UPDATE mascotas SET nombre=?,tipo=?,raza=?,edad_anios=?,estatura_cm=?,tamano=?,etapa=?,esterilizado=?,peso_actual=?,nivel_actividad=?,condicion=?,alergias=?
+                           WHERE id=? AND usuario_id=?')
+                ->execute([$m['nombre'], ucfirst($m['tipo']), $m['raza'] ?: null, $m['edad_anios'], $m['estatura_cm'], $m['tamano'], $m['etapa'], $m['esterilizado'], $m['peso_kg'],
+                           ucfirst($m['actividad']), $m['condicion'], $m['alergias'] ?: null, $actual['id'], $u['id']]);
+            if (abs((float)$actual['peso_kg'] - $m['peso_kg']) > 0.001) {
+                $pdo->prepare('INSERT INTO registros_peso (mascota_id, fecha, peso) VALUES (?,?,?)')
+                    ->execute([$actual['id'], date('Y-m-d'), $m['peso_kg']]);
+            }
+            $pdo->commit();
+            flash('success', 'Cambios guardados.');
+            redirigir('perfil.html');
+        }
+    }
+
+    $pageTitle = 'Editar mascota';
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="page-head">
+    <div class="container">
+        <h1>
+            Editar ficha de <?= e($actual['nombre']) ?>
+        </h1>
+        <p class="muted mb-0">
+            Actualiza los datos que hayan cambiado.
+        </p>
+    </div>
+</div>
+<div class="container pb-5">
+    <div class="form-card">
+        <form action="editar.html" method="post">
+            <?php include __DIR__.'/_form.php'; ?>
+            <button class="btn btn-primary mt-4">
+                Guardar cambios
+            </button>
+            <a href="perfil.html" class="btn btn-primary-soft mt-4">Cancelar</a>
+        </form>
+    </div>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>

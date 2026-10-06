@@ -1,0 +1,45 @@
+<?php
+    $base = '../';
+    require_once $base.'includes/auth.php';
+    require_once $base.'includes/mascotas.php';
+    require_once $base.'includes/calculos.php';
+    require_once $base.'includes/contenido.php';
+    $u = usuario_actual();
+    $m = $u ? mascota_activa((int)$u['id']) : null;
+    $recetas = recetas_publicadas($m['tipo'] ?? null);
+
+    $pageTitle = 'Recetas saludables';
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="page-head">
+    <div class="container">
+        <h1>Recetas NutriHuella 🍲</h1>
+        <p class="muted mb-0">
+            <?= $m ? 'Recetas para '.e($m['nombre']).' ('.($m['tipo'] === 'gato' ? 'gato' : 'perro').'). Te avisamos si alguna incluye algo que registraste como alergia.' : 'Ideas organizadas para explorar ingredientes y preparaciones.' ?>
+        </p>
+    </div>
+</div>
+<div class="container pb-5">
+    <?php if (!$recetas): ?>
+        <div class="nh-card text-center py-5"><p class="muted mb-0">Aún no hay recetas publicadas para <?= $m ? e($m['nombre']) : 'mostrar' ?>.</p></div>
+    <?php endif; ?>
+    <div class="row g-4">
+        <?php foreach ($recetas as $r):
+            $alerg = $m ? alergenos_en($m['alergias'], $r['titulo'].' '.$r['ingredientes']) : []; ?>
+            <div class="col-md-4">
+                <div class="recipe-card">
+                    <div class="recipe-emoji"><?= emoji_receta($r) ?></div>
+                    <span class="badge-soft mt-3 d-inline-block"><?= e(etiqueta_especie($r['especie'])) ?></span>
+                    <?php if ($alerg): ?><span class="badge text-bg-warning mt-3">⚠️ Contiene: <?= e(implode(', ', $alerg)) ?></span><?php endif; ?>
+                    <h4 class="fw-800 mt-2"><?= e($r['titulo']) ?></h4>
+                    <p class="muted"><?= e(mb_strimwidth((string)$r['descripcion'], 0, 110, '…')) ?></p>
+                    <a href="receta.html?id=<?= (int)$r['id'] ?>" class="btn btn-primary-soft">Ver receta</a>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>

@@ -1,0 +1,121 @@
+<?php
+    $base = '../';
+    require_once $base.'includes/auth.php';
+    require_once $base.'includes/mascotas.php';
+    require_once $base.'includes/calculos.php';
+    require_once $base.'includes/seguimiento.php';
+    [$u, $m] = requerir_mascota($base);
+    $mid = (int)$m['id'];
+
+    $pesos = pesos_de($mid);
+    $a = analizar_peso($m, $pesos);
+    $t = transicion_de($mid);
+    $min = (float)$m['rango_min']; $max = (float)$m['rango_max'];
+    $cond = ['bajo' => 'Bajo peso', 'ideal' => 'Peso ideal', 'sobrepeso' => 'Sobrepeso'][$m['condicion']];
+    $signo = fn($v) => ($v > 0 ? '+' : '').kg((float)$v).' kg';
+
+    // ---- Gráfica SVG de la evolución (una sola serie: peso) ----
+    $W = 640; $H = 280; $L = 46; $R = 16; $T = 16; $B = 36;
+    $svg = '';
+    if (count($pesos) >= 1) {
+        $vals = array_column($pesos, 'peso');
+        $ymin = min($vals); $ymax = max($vals);
+        if ($ymax - $ymin < 0.5) { $ymin -= 0.5; $ymax += 0.5; }
+        // La banda de rango ideal se incluye si queda cerca de los datos
+        $pad = ($ymax - $ymin) * 0.15;
+        $ymin -= $pad; $ymax += $pad;
+        if ($min > $ymin - ($ymax - $ymin) && $min < $ymax) $ymin = min($ymin, $min - 0.1 * ($ymax - $ymin));
+        if ($max < $ymax + ($ymax - $ymin) && $max > $ymin) $ymax = max($ymax, $max + 0.1 * ($ymax - $ymin));
+        $t0 = strtotime($pesos[0]['fecha']); $t1 = strtotime(end($pesos)['fecha']);
+        $X = fn($ts) => $t1 > $t0 ? $L + ($ts - $t0) / ($t1 - $t0) * ($W - $L - $R) : $L + ($W - $L - $R) / 2;
+        $Y = fn($v) => $T + ($ymax - $v) / ($ymax - $ymin) * ($H - $T - $B);
+        // Rejilla horizontal (4 líneas) + etiquetas del eje
+        for ($i = 0; $i <= 4; $i++) {
+            $v = $ymin + ($ymax - $ymin) * $i / 4; $y = $Y($v);
+            $svg .= '<line x1="'.$L.'" x2="'.($W - $R).'" y1="'.round($y, 1).'" y2="'.round($y, 1).'" stroke="#dfe8e2" stroke-width="1"/>';
+            $svg .= '<text x="'.($L - 8).'" y="'.round($y + 4, 1).'" text-anchor="end" font-size="11" fill="#68766f">'.number_format($v, 1).'</text>';
+        }
+        // Banda de rango ideal (solo si cae dentro del eje visible)
+        $b1 = max($min, $ymin); $b2 = min($max, $ymax);
+        if ($m['etapa'] !== 'cachorro' && $b1 < $b2) {
+            $svg .= '<rect x="'.$L.'" y="'.round($Y($b2), 1).'" width="'.($W - $L - $R).'" height="'.round($Y($b1) - $Y($b2), 1).'" fill="#6f9f86" opacity=".18"/>';
+            $svg .= '<text x="'.($W - $R - 6).'" y="'.round($Y($b2) + 14, 1).'" text-anchor="end" font-size="11" fill="#3f705b">Rango ideal '.$min.'–'.$max.' kg</text>';
+        }
+        // Línea + puntos
+        $pts = []; foreach ($pesos as $p) $pts[] = round($X(strtotime($p['fecha'])), 1).','.round($Y($p['peso']), 1);
+        if (count($pts) > 1) $svg .= '<polyline points="'.implode(' ', $pts).'" fill="none" stroke="#3f705b" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+        foreach ($pesos as $i => $p) {
+            $cx = round($X(strtotime($p['fecha'])), 1); $cy = round($Y($p['peso']), 1);
+            $tip = e(fecha_es($p['fecha']).': '.kg($p['peso']).' kg');
+            $svg .= '<g><title>'.$tip.'</title><circle cx="'.$cx.'" cy="'.$cy.'" r="14" fill="transparent"/><circle cx="'.$cx.'" cy="'.$cy.'" r="5" fill="#3f705b" stroke="#fff" stroke-width="2"/></g>';
+        }
+        // Etiquetas de fecha: primera y última
+        $svg .= '<text x="'.$L.'" y="'.($H - 10).'" font-size="11" fill="#68766f">'.e(fecha_es($pesos[0]['fecha'])).'</text>';
+        if (count($pesos) > 1) $svg .= '<text x="'.($W - $R).'" y="'.($H - 10).'" text-anchor="end" font-size="11" fill="#68766f">'.e(fecha_es(end($pesos)['fecha'])).'</text>';
+    }
+
+    $pageTitle = 'Progreso';
+    include $base.'includes/header.php';
+    include $base.'includes/navbar.php';
+?>
+
+<div class="page-head"><div class="container"><h1>Progreso de <?= e($m['nombre']) ?> 📈</h1><p class="muted mb-0">Resumen del seguimiento con las mediciones registradas.</p></div></div>
+<div class="container pb-5">
+<?php if (!$pesos): ?>
+    <div class="nh-card text-center py-5">
+        <h4 class="fw-800">Aún no hay mediciones de peso</h4>
+        <p class="muted">Registra el peso de <?= e($m['nombre']) ?> para ver su evolución.</p>
+        <a href="peso.html" class="btn btn-primary">Registrar peso</a>
+    </div>
+<?php else: ?>
+    <div class="row g-4">
+        <div class="col-md-3"><div class="stat-card"><span class="muted">Peso inicial</span><div class="stat-number"><?= kg($a['inicial']) ?> kg</div><span class="muted"><?= e(fecha_es($pesos[0]['fecha'])) ?></span></div></div>
+        <div class="col-md-3"><div class="stat-card"><span class="muted">Peso actual</span><div class="stat-number"><?= kg($a['actual']) ?> kg</div><span class="muted"><?= e(fecha_es(end($pesos)['fecha'])) ?></span></div></div>
+        <div class="col-md-3"><div class="stat-card"><span class="muted">Variación</span><div class="stat-number"><?= $a['n'] > 1 ? $signo($a['variacion']) : '—' ?></div>
+            <span class="muted"><?= $a['kg_semana'] !== null ? $signo($a['kg_semana']).' por semana' : ($a['n'] > 1 ? 'en '.$a['dias'].' días' : 'Se necesitan 2 mediciones') ?></span></div></div>
+        <div class="col-md-3"><div class="stat-card"><span class="muted">Condición corporal</span><div class="stat-number" style="font-size:1.6rem"><?= $m['etapa'] === 'cachorro' ? 'En crecimiento' : e($cond) ?></div>
+            <span class="muted">Rango ideal <?= e($min) ?>–<?= e($max) ?> kg</span></div></div>
+    </div>
+
+    <?php if ($a['meta_kg'] > 0): ?>
+        <div class="alert alert-<?= $m['condicion'] === 'sobrepeso' ? 'warning' : 'info' ?> mt-4 mb-0">
+            <?php if ($m['condicion'] === 'sobrepeso'): ?>
+                <?= e($m['nombre']) ?> está <b><?= kg($a['meta_kg']) ?> kg</b> por encima de su rango ideal. Con una pérdida gradual de ~1% del peso por semana, tomaría unas <b><?= $a['meta_semanas'] ?> semanas</b> (orientativo).
+            <?php else: ?>
+                <?= e($m['nombre']) ?> está <b><?= kg($a['meta_kg']) ?> kg</b> por debajo de su rango ideal. Con una ganancia gradual de ~1% del peso por semana, tomaría unas <b><?= $a['meta_semanas'] ?> semanas</b> (orientativo).
+            <?php endif; ?>
+            <?php if ($a['tendencia']): ?> Última tendencia: <b><?= e($a['tendencia']) ?></b>.<?php endif; ?>
+            Consulta con tu veterinario antes de ajustar la dieta.
+        </div>
+    <?php elseif ($m['etapa'] !== 'cachorro'): ?>
+        <div class="alert alert-success mt-4 mb-0"><?= e($m['nombre']) ?> está dentro de su rango ideal. ¡Sigue así!<?= $a['tendencia'] ? ' Última tendencia: <b>'.e($a['tendencia']).'</b>.' : '' ?></div>
+    <?php endif; ?>
+
+    <div class="nh-card mt-4">
+        <h5 class="fw-800">Evolución de peso</h5>
+        <?php if (count($pesos) < 2): ?><p class="muted">Registra otra medición para ver la línea de evolución.</p><?php endif; ?>
+        <svg viewBox="0 0 <?= $W ?> <?= $H ?>" width="100%" role="img" aria-label="Evolución del peso de <?= e($m['nombre']) ?>" style="max-width:720px"><?= $svg ?></svg>
+        <details class="mt-2">
+            <summary class="muted">Ver como tabla</summary>
+            <table class="table table-sm mt-2"><thead><tr><th>Fecha</th><th>Peso</th></tr></thead><tbody>
+                <?php foreach (array_reverse($pesos) as $p): ?><tr><td><?= e(fecha_es($p['fecha'])) ?></td><td><?= kg($p['peso']) ?> kg</td></tr><?php endforeach; ?>
+            </tbody></table>
+        </details>
+        <a href="peso.html" class="btn btn-primary-soft mt-3">Registrar peso</a>
+    </div>
+<?php endif; ?>
+
+    <div class="nh-card mt-4">
+        <h5 class="fw-800">Transición alimentaria</h5>
+        <?php if (!$t): ?>
+            <p class="muted">Aún no has iniciado un plan de transición para <?= e($m['nombre']) ?>.</p>
+            <a href="transicion.html" class="btn btn-primary">Iniciar plan de 4 semanas</a>
+        <?php else: ?>
+            <div class="d-flex justify-content-between"><span><?= $t['estado'] === 'completada' ? 'Plan completado' : ($t['estado'] === 'pausada' ? 'Plan en pausa' : 'Semana '.$t['actual'].' de '.$t['total']) ?></span><b><?= $t['pct'] ?>%</b></div>
+            <div class="progress mt-2"><div class="progress-bar" style="width:<?= $t['pct'] ?>%"></div></div>
+            <a href="transicion.html" class="btn btn-primary-soft mt-3">Ver plan</a>
+        <?php endif; ?>
+    </div>
+</div>
+
+<?php include $base.'includes/footer.php'; ?>
